@@ -1,0 +1,60 @@
+version: "3.8"
+services:
+  traefik:
+    image: "traefik:latest"
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  flask:
+    build:
+      context: .
+    depends_on:
+      - "traefik"
+      - "postgres"
+    volumes:
+      - "./rest_api:/rest_api/"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.flask.loadbalancer.server.port=80"
+      - "traefik.http.routers.flask.rule=Host(`localhost`, `lvh.me`, `pfp.lvh.me`, `example.com`)"
+      - "traefik.http.routers.flask.entrypoints=web"
+
+  postgres:
+    image: "postgres:13"
+    depends_on:
+      - "traefik"
+    environment:
+      POSTGRES_DB: "db_postgres"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+      PGDATA: "/var/lib/postgresql/data"
+    volumes:
+      #- "./postgres_seed.sql:/docker-entrypoint-initdb.d/postgres_seed.sql"
+      - "./db-data:/var/lib/postgresql/data"
+    labels:
+      - "traefik.enable=false"
+  
+  pgadmin:
+    image: "dpage/pgadmin4:latest"
+    depends_on:
+      - "traefik"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "dbuser@pgadmin.com"
+      PGADMIN_DEFAULT_PASSWORD: "dbpass"
+      PGADMIN_LISTEN_PORT: "80"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`pga.lvh.me`)"
+      - "traefik.http.routers.whoami.entrypoints=web"
+
+networks:
+  default:
+    name: "traefikNetwork"
